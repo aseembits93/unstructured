@@ -159,73 +159,65 @@ def apply_metadata(
 
         @functools.wraps(func)
         def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> list[Element]:
+            # Avoid calling get_call_args_applying_defaults unless needed:
+            # - Early exit if func output is empty
             elements = func(*args, **kwargs)
+            if not elements:
+                return elements
+
             call_args = get_call_args_applying_defaults(func, *args, **kwargs)
 
             # ------------------------------------------------------------------------------------
-            # unique-ify elements
+            # unique-ify elements (in place)
             # ------------------------------------------------------------------------------------
-            # Do this first to ensure all following operations behave as expected. It's easy for a
-            # partitioner to re-use an element or metadata instance when its values are common to
-            # multiple elements. This can lead to very hard-to diagnose bugs downstream when
-            # mutating one element unexpectedly also mutates others (because they are the same
-            # instance).
-            # ------------------------------------------------------------------------------------
-
             elements = _uniqueify_elements_and_metadata(elements)
 
             # ------------------------------------------------------------------------------------
             # apply metadata - do this first because it affects the hash computation.
             # ------------------------------------------------------------------------------------
-
-            # -- `language` - auto-detect language (e.g. eng, spa) --
             languages = call_args.get("languages")
             detect_language_per_element = call_args.get("detect_language_per_element", False)
-            elements = list(
-                apply_lang_metadata(
-                    elements=elements,
-                    languages=languages,
-                    detect_language_per_element=detect_language_per_element,
-                )
+            # Avoid unnecessary list allocation if apply_lang_metadata returns same object
+            # (assuming the interface always returns an iterable, possibly the same input)
+            lang_applied = apply_lang_metadata(
+                elements=elements,
+                languages=languages,
+                detect_language_per_element=detect_language_per_element,
             )
+            if lang_applied is not elements:
+                elements = list(lang_applied)
 
             # == apply filetype, filename, last_modified, and url metadata ===================
             metadata_kwargs: dict[str, Any] = {}
 
-            # -- `filetype` (MIME-type) metadata --
             metadata_file_type = call_args.get("metadata_file_type") or file_type
             if metadata_file_type is not None:
                 metadata_kwargs["filetype"] = metadata_file_type.mime_type
 
-            # -- `filename` metadata - override with metadata_filename when it's present --
             filename = call_args.get("metadata_filename") or call_args.get("filename")
             if filename:
                 metadata_kwargs["filename"] = filename
 
-            # -- `last_modified` metadata - override with metadata_last_modified when present --
             metadata_last_modified = call_args.get("metadata_last_modified")
             if metadata_last_modified:
                 metadata_kwargs["last_modified"] = metadata_last_modified
 
-            # -- `url` metadata - record url when present --
             url = call_args.get("url")
             if url:
                 metadata_kwargs["url"] = url
 
-            # -- update element.metadata in single pass --
-            for element in elements:
-                # NOTE(robinson) - Attached files have already run through this logic in their own
-                # partitioning function
-                if element.metadata.attached_to_filename:
-                    continue
-                element.metadata.update(ElementMetadata(**metadata_kwargs))
+            if metadata_kwargs:
+                meta_obj = ElementMetadata(**metadata_kwargs)
+                # Slight optimization: avoid constructing a new ElementMetadata for every element,
+                # except when element.metadata.attached_to_filename disables update.
+                for el in elements:
+                    if el.metadata.attached_to_filename:
+                        continue
+                    el.metadata.update(meta_obj)
 
             # ------------------------------------------------------------------------------------
             # compute hash ids (when so requestsd)
             # ------------------------------------------------------------------------------------
-
-            # -- Compute and apply hash-ids if the user does not want UUIDs. Note this mutates the
-            # -- elements themselves, not their metadata.
             unique_element_ids: bool = call_args.get("unique_element_ids", False)
             if unique_element_ids is False:
                 elements = _assign_hash_ids(elements)
@@ -233,8 +225,6 @@ def apply_metadata(
             # ------------------------------------------------------------------------------------
             # assign parent-id - do this after hash computation so parent-id is stable.
             # ------------------------------------------------------------------------------------
-
-            # -- `parent_id` - process category-level etc. to assign parent-id --
             elements = set_element_hierarchy(elements)
 
             return elements
