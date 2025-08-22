@@ -78,11 +78,20 @@ class CoordinatesMetadata:
         )
 
     def to_dict(self):
+        system = self.system
+        if system is None:
+            return {
+                "points": self.points,
+                "system": None,
+                "layout_width": None,
+                "layout_height": None,
+            }
+        system_name = type(system).__name__
         return {
             "points": self.points,
-            "system": None if self.system is None else str(self.system.__class__.__name__),
-            "layout_width": None if self.system is None else self.system.width,
-            "layout_height": None if self.system is None else self.system.height,
+            "system": system_name,
+            "layout_width": system.width,
+            "layout_height": system.height,
         }
 
     @classmethod
