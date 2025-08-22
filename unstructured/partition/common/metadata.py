@@ -71,6 +71,7 @@ def set_element_hierarchy(
     category_depth is only relevant when elements are of the same category.
     """
     stack: list[Element] = []
+    # Cache frequently accessed attribute lookups for top element of the stack
     for element in elements:
         if element.metadata.parent_id is not None:
             continue
@@ -83,23 +84,18 @@ def set_element_hierarchy(
             continue
 
         while stack:
-            top_element: Element = stack[-1]
-            top_element_category = getattr(top_element, "category")
-            top_element_category_depth = (
-                getattr(
-                    top_element.metadata,
-                    "category_depth",
-                    0,
-                )
-                or 0
-            )
+            top_element = stack[-1]
+            # Cache the frequently used properties for the top element once
+            top_element_category = top_element.category
+            # direct attribute access (likely more performant than getattr if attribute always exists)
+            top_element_category_depth = getattr(top_element.metadata, "category_depth", 0) or 0
 
             if (
                 top_element_category == element_category
                 and top_element_category_depth < element_category_depth
             ) or (
                 top_element_category != element_category
-                and element_category in ruleset.get(top_element_category, [])
+                and element_category in ruleset.get(top_element_category, ())
             ):
                 parent_id = top_element.id
                 break
@@ -109,7 +105,9 @@ def set_element_hierarchy(
         element.metadata.parent_id = parent_id
         stack.append(element)
 
-    return list(elements)
+    # Input is Sequence[Element]; guard against no-op reallocation with .copy()
+    # Avoids unnecessary copy if 'elements' is already a list
+    return elements if isinstance(elements, list) else list(elements)
 
 
 # ================================================================================================
