@@ -40,7 +40,13 @@ class DataSourceMetadata:
     permissions_data: Optional[list[dict[str, Any]]] = None
 
     def to_dict(self):
-        return {key: value for key, value in self.__dict__.items() if value is not None}
+        dict_items = self.__dict__
+        result = {}
+        for key in dict_items:
+            value = dict_items[key]
+            if value is not None:
+                result[key] = value
+        return result
 
     @classmethod
     def from_dict(cls, input_dict: dict[str, Any]):
