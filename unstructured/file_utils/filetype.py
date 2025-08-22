@@ -767,6 +767,9 @@ def add_metadata(func: Callable[_P, list[Element]]) -> Callable[_P, list[Element
     @functools.wraps(func)
     def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> list[Element]:
         elements = func(*args, **kwargs)
+        if not elements:
+            return elements
+
         call_args = get_call_args_applying_defaults(func, *args, **kwargs)
 
         if call_args.get("metadata_filename"):
