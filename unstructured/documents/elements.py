@@ -333,8 +333,6 @@ class ElementMetadata:
         """
         from unstructured.staging.base import elements_from_base64_gzipped_json
 
-        # -- avoid unexpected mutation by working on a copy of provided dict --
-        meta_dict = copy.deepcopy(meta_dict)
         self = ElementMetadata()
         for field_name, field_value in meta_dict.items():
             if field_name == "coordinates":
