@@ -64,27 +64,34 @@ class HtmlTable:
             raise ValueError("`html_text` contains no `<table>` element")
         table = tables[0]
 
-        # -- remove `<thead>`, `<tbody>`, and `<tfoot>` noise elements when present --
-        noise_elements = table.xpath(".//thead | .//tbody | .//tfoot")
-        for e in noise_elements:
+        # -- remove <thead>, <tbody>, <tfoot> noise elements when present --
+        # Use .iter() w/tag filter to avoid repeated xpath parsing & allocation
+        # Build a list first to avoid modifying tree while iterating directly
+        elems_to_drop = [e for e in table.iter() if e.tag in ("thead", "tbody", "tfoot")]
+        for e in elems_to_drop:
             e.drop_tag()
 
         # -- normalize and compactify the HTML --
+        # Reuse attributes as local for speed
         for e in table.iter():
-            # -- Strip all attributes from elements, like border="1", class="dataframe" added
-            # -- by pandas.DataFrame.to_html(), style="text-align: right;", etc.
-            e.attrib.clear()
-
-            # -- change any `<th>` elements to `<td>` so all cells have the same tag --
+            # Strip attributes
+            attrib = e.attrib
+            if attrib:
+                attrib.clear()
+            # Convert <th> to <td>
             if e.tag == "th":
                 e.tag = "td"
-
-            # -- normalize whitespace in element text; this removes indent whitespace before nested
-            # -- elements and reduces whitespace between words to a single space.
-            if e.text:
-                e.text = " ".join(e.text.split())
-
-            # -- remove all tails, those are newline + indent if anything --
+            # Normalize whitespace in e.text
+            text = e.text
+            if text:
+                # Only process if text contains more than one word or whitespace
+                stripped = text.strip()
+                if len(stripped) < len(text) or " " in stripped:
+                    e.text = " ".join(stripped.split())
+                else:
+                    if text is not stripped:
+                        e.text = stripped
+            # Remove all tails
             if e.tail:
                 e.tail = None
 
