@@ -829,6 +829,7 @@ def add_metadata_with_filetype(
     """..."""
 
     def decorator(func: Callable[_P, list[Element]]) -> Callable[_P, list[Element]]:
-        return add_filetype(filetype=filetype)(add_metadata(func))
+        add_metadata_func = add_metadata(func)
+        return add_filetype(filetype=filetype)(add_metadata_func)
 
     return decorator
