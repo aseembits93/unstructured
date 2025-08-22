@@ -489,6 +489,12 @@ def convert_to_coco(
 ) -> dict[str, Any]:
     from unstructured.documents.elements import TYPE_TO_TEXT_ELEMENT_MAP
 
+    TABLE_FIELDNAMES: list[str] = [
+        "type",
+        "text",
+        "element_id",
+    ] + _get_metadata_table_fieldnames()
+
     coco_dataset: dict[str, Any] = {}
     # Handle Info
     coco_dataset["info"] = {
