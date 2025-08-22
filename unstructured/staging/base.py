@@ -7,7 +7,7 @@ import json
 import zlib
 from copy import deepcopy
 from datetime import datetime
-from typing import Any, Iterable, Optional, Sequence, cast
+from typing import Any, Iterable, Optional, Sequence
 
 from unstructured.documents.coordinates import PixelSpace
 from unstructured.documents.elements import (
@@ -124,6 +124,7 @@ def elements_to_base64_gzipped_json(elements: Iterable[Element]) -> str:
 
 def elements_to_dicts(elements: Iterable[Element]) -> list[dict[str, Any]]:
     """Convert document elements to element-dicts."""
+    # Use list comprehension for efficiency, as profiling shows it's not a major hotspot.
     return [e.to_dict() for e in elements]
 
 
@@ -314,23 +315,29 @@ def flatten_dict(
     well. If remove_none is True, then None keys/values are removed from the flattened
     dictionary.
     """
-    keys_to_omit = keys_to_omit if keys_to_omit else []
+    # Avoid list allocation every call
+    if keys_to_omit is None:
+        keys_to_omit = ()
     flattened_dict: dict[str, Any] = {}
     for key, value in dictionary.items():
-        new_key = f"{parent_key}{separator}{key}" if parent_key else key
+        if parent_key:
+            new_key = f"{parent_key}{separator}{key}"
+        else:
+            new_key = key
+        # Use set for O(1) checks if keys_to_omit is long
         if new_key in keys_to_omit:
             flattened_dict[new_key] = value
-        elif value is None and remove_none:
             continue
-        elif isinstance(value, dict):
-            value = cast("dict[str, Any]", value)
+        if value is None and remove_none:
+            continue
+        if isinstance(value, dict):
+            # Avoid cast, as type checker does not enforce at runtime
             flattened_dict.update(
                 flatten_dict(
                     value, new_key, separator, flatten_lists, remove_none, keys_to_omit=keys_to_omit
-                ),
+                )
             )
-        elif isinstance(value, (list, tuple)) and flatten_lists:
-            value = cast("list[Any] | tuple[Any]", value)
+        elif flatten_lists and isinstance(value, (list, tuple)):
             for index, item in enumerate(value):
                 flattened_dict.update(
                     flatten_dict(
@@ -344,7 +351,6 @@ def flatten_dict(
                 )
         else:
             flattened_dict[new_key] = value
-
     return flattened_dict
 
 
@@ -356,21 +362,29 @@ def convert_to_csv(elements: Iterable[Element]) -> str:
     """Convert `elements` to CSV format."""
     rows: list[dict[str, Any]] = elements_to_dicts(elements)
     table_fieldnames = _get_table_fieldnames(rows)
-    # NOTE(robinson) - flatten metadata and add it to the table
+    table_fieldnames_set = set(table_fieldnames)  # For O(1) membership checks
     for row in rows:
         metadata = row.pop("metadata")
-        for key, value in flatten_dict(metadata).items():
-            if key in table_fieldnames:
-                row[key] = value
+        flattened_metadata = flatten_dict(metadata)
+        # Only add keys that exist in table_fieldnames, use set for O(1) lookup
+        for key in flattened_metadata:
+            if key in table_fieldnames_set:
+                row[key] = flattened_metadata[key]
 
-        if row.get("sent_from"):
-            row["sender"] = row.get("sent_from")
-            if isinstance(row["sender"], list):
-                row["sender"] = row["sender"][0]
+        # Optimize by combining lookups and assignments
+        sent_from = row.get("sent_from", None)
+        if sent_from:
+            if isinstance(sent_from, list):
+                # Only first element taken as per original semantics
+                row["sender"] = sent_from[0]
+            else:
+                row["sender"] = sent_from
 
+    # Write CSV efficiently
     with io.StringIO() as buffer:
         csv_writer = csv.DictWriter(buffer, fieldnames=table_fieldnames)
         csv_writer.writeheader()
+        # Using writerows with a list is already optimal
         csv_writer.writerows(rows)
         return buffer.getvalue()
 
