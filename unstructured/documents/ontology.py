@@ -161,11 +161,13 @@ def remove_ids_and_class_from_table(
     Returns:
         BeautifulSoup: Modified soup with attributes removed
     """
+    class_attr_to_keep = set(class_attr_to_keep)
     for tag in soup.find_all(True):
-        if tag.name.lower() == "table":  # type: ignore
+        tag_name = tag.name.lower()
+        if tag_name == "table":  # type: ignore
             continue  # We keep table tag
         tag.attrs.pop("id", None)  # type: ignore
-        if tag.name.lower() not in class_attr_to_keep:  # type: ignore
+        if tag_name not in class_attr_to_keep:  # type: ignore
             tag.attrs.pop("class", None)  # type: ignore
     return soup
 
