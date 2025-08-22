@@ -89,13 +89,7 @@ class CoordinatesMetadata:
     def from_dict(cls, input_dict: dict[str, Any]):
         # `input_dict` may contain a tuple of tuples or a list of lists
         def convert_to_points(sequence_of_sequences: Sequence[Sequence[float]]) -> Points:
-            points: list[Point] = []
-            for seq in sequence_of_sequences:
-                if isinstance(seq, list):
-                    points.append(cast(Point, tuple(seq)))
-                elif isinstance(seq, tuple):
-                    points.append(cast(Point, seq))
-            return tuple(points)
+            return tuple(tuple(seq) for seq in sequence_of_sequences)
 
         # -- parse points --
         input_points = input_dict.get("points")
