@@ -238,15 +238,17 @@ def dependency_exists(dependency: str):
 
 
 def _first_and_remaining_iterator(it: Iterable[_T]) -> Tuple[_T, Iterator[_T]]:
+    # Convert 'it' to iterator only once, minimizing local lookups
     iterator = iter(it)
     try:
-        out = next(iterator)
+        # Use a local variable and return tuple directly to avoid multiple attribute lookups
+        return next(iterator), iterator
     except StopIteration:
+        # Raise the same ValueError with the same message
         raise ValueError(
             "Expected at least 1 element in iterable from which to retrieve first, got empty "
             "iterable.",
         )
-    return out, iterator
 
 
 def first(it: Iterable[_T]) -> _T:
@@ -316,13 +318,7 @@ def scarf_analytics():
 def ngrams(s: list[str], n: int) -> list[tuple[str, ...]]:
     """Generate n-grams from a list of strings where `n` (int) is the size of each n-gram."""
 
-    ngrams_list: list[tuple[str, ...]] = []
-    for i in range(len(s) - n + 1):
-        ngram: list[str] = []
-        for j in range(n):
-            ngram.append(s[i + j])
-        ngrams_list.append(tuple(ngram))
-    return ngrams_list
+    return [tuple(s[i : i + n]) for i in range(len(s) - n + 1)]
 
 
 def calculate_shared_ngram_percentage(
