@@ -786,12 +786,13 @@ class CheckBox(Element):
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, CheckBox):
             return False
-        return all(
-            (
-                self.checked == other.checked,
-                self.metadata.coordinates == other.metadata.coordinates,
-            )
-        )
+        if self.checked != other.checked:
+            return False
+        coord1 = self.metadata.coordinates
+        coord2 = other.metadata.coordinates
+        if coord1 is coord2:
+            return True
+        return coord1 == coord2
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize to JSON-compatible (str keys) dict."""
