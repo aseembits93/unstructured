@@ -1211,13 +1211,11 @@ class _PreChunkAccumulator:
 
         Does not generate a pre-chunk when none has been accumulated.
         """
-        # -- nothing to do if no pre-chunk has been accumulated --
-        if not self._pre_chunk:
+        pre_chunk = self._pre_chunk
+        if pre_chunk is None:
             return
-        # -- otherwise generate the combined pre-chunk --
-        yield self._pre_chunk
-        # -- and reset the accumulator (to empty) --
         self._pre_chunk = None
+        yield pre_chunk
 
     def will_fit(self, pre_chunk: PreChunk) -> bool:
         """True when there is room for `pre_chunk` in accumulator.
