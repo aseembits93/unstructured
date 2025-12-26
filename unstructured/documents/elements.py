@@ -45,7 +45,7 @@ class DataSourceMetadata:
     @classmethod
     def from_dict(cls, input_dict: dict[str, Any]):
         # Only use existing fields when constructing
-        supported_fields = [f.name for f in dc.fields(cls)]
+        supported_fields = {f.name for f in dc.fields(cls)}
         args = {k: v for k, v in input_dict.items() if k in supported_fields}
 
         return cls(**args)
