@@ -52,10 +52,18 @@ def get_call_args_applying_defaults(
 ) -> dict[str, Any]:
     """Map both explicit and default arguments of decorated func call by param name."""
     sig = inspect.signature(func)
-    call_args: dict[str, Any] = dict(**dict(zip(sig.parameters, args)), **kwargs)
-    for arg in sig.parameters.values():
-        if arg.name not in call_args and arg.default is not arg.empty:
-            call_args[arg.name] = arg.default
+    parameters = sig.parameters
+    param_names = list(parameters)
+    call_args = dict.fromkeys(param_names)
+    # Set from positional args
+    for idx, value in enumerate(args):
+        call_args[param_names[idx]] = value
+    # Set from kwargs
+    call_args.update(kwargs)
+    # Fill missing with defaults
+    for name in param_names:
+        if call_args[name] is None and parameters[name].default is not parameters[name].empty:
+            call_args[name] = parameters[name].default
     return call_args
 
 
