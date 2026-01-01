@@ -315,14 +315,10 @@ def scarf_analytics():
 
 def ngrams(s: list[str], n: int) -> list[tuple[str, ...]]:
     """Generate n-grams from a list of strings where `n` (int) is the size of each n-gram."""
-
-    ngrams_list: list[tuple[str, ...]] = []
-    for i in range(len(s) - n + 1):
-        ngram: list[str] = []
-        for j in range(n):
-            ngram.append(s[i + j])
-        ngrams_list.append(tuple(ngram))
-    return ngrams_list
+    if n <= 0:
+        # For n <= 0, range(n) produces empty range, so each ngram is empty tuple
+        return [() for _ in range(len(s) - n + 1)]
+    return [tuple(s[i : i + n]) for i in range(len(s) - n + 1)]
 
 
 def calculate_shared_ngram_percentage(
@@ -334,12 +330,13 @@ def calculate_shared_ngram_percentage(
     if not n:
         return 0, set()
     first_string_ngrams = ngrams(first_string.split(), n)
-    second_string_ngrams = ngrams(second_string.split(), n)
 
     if not first_string_ngrams:
         return 0, set()
 
-    common_ngrams = set(first_string_ngrams) & set(second_string_ngrams)
+    first_ngrams_set = set(first_string_ngrams)
+    second_string_ngrams = ngrams(second_string.split(), n)
+    common_ngrams = first_ngrams_set & set(second_string_ngrams)
     percentage = (len(common_ngrams) / len(first_string_ngrams)) * 100
     return percentage, common_ngrams
 
