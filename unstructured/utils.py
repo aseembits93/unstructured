@@ -51,7 +51,7 @@ def get_call_args_applying_defaults(
     **kwargs: _P.kwargs,
 ) -> dict[str, Any]:
     """Map both explicit and default arguments of decorated func call by param name."""
-    sig = inspect.signature(func)
+    sig = _get_cached_signature(func)
     call_args: dict[str, Any] = dict(**dict(zip(sig.parameters, args)), **kwargs)
     for arg in sig.parameters.values():
         if arg.name not in call_args and arg.default is not arg.empty:
@@ -747,6 +747,12 @@ def catch_overlapping_and_nested_bboxes(
                 document_with_overlapping_flag = True
 
     return document_with_overlapping_flag, overlapping_cases
+
+
+@functools.lru_cache(maxsize=128)
+def _get_cached_signature(func: Callable[_P, List[Element]]) -> inspect.Signature:
+    """Cache function signatures to avoid repeated introspection."""
+    return inspect.signature(func)
 
 
 class FileHandler:
