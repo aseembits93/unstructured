@@ -1036,6 +1036,8 @@ def _kvform_rehydrate_internal_elements(kv_pairs: list[dict[str, Any]]) -> list[
     """
     from unstructured.staging.base import elements_from_dicts
 
+    Points: TypeAlias = "tuple[Point, ...]"
+
     # safe to overwrite - deepcopy already happened
     for kv_pair in kv_pairs:
         if kv_pair["key"]["custom_element"] is not None:

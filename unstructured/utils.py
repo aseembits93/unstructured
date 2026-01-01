@@ -7,6 +7,7 @@ import inspect
 import json
 import os
 import platform
+import re
 import subprocess
 import tempfile
 import threading
@@ -31,8 +32,12 @@ from typing_extensions import ParamSpec, TypeAlias
 
 from unstructured.__version__ import __version__
 
+_NUMERIC_PATTERN = re.compile(r"\d+")
+
 if TYPE_CHECKING:
     from unstructured.documents.elements import Element, Text
+
+    Box: TypeAlias = Tuple[float, float, float, float]
 
 # Box format: [x_bottom_left, y_bottom_left, x_top_right, y_top_right]
 Box: TypeAlias = Tuple[float, float, float, float]
@@ -586,8 +591,10 @@ def identify_overlapping_or_nesting_case(
     """
     box1, box2 = box_pair
     type1, type2 = label_pair
-    ix_element1 = "".join([ch for ch in type1 if ch.isnumeric()])
-    ix_element2 = "".join([ch for ch in type2 if ch.isnumeric()])
+    match1 = _NUMERIC_PATTERN.search(type1)
+    match2 = _NUMERIC_PATTERN.search(type2)
+    ix_element1 = match1.group() if match1 else ""
+    ix_element2 = match2.group() if match2 else ""
     type1 = type1[3:].strip()
     type2 = type2[3:].strip()
     box1_corners = _convert_coordinates_to_box(box1)
