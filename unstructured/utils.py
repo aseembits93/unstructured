@@ -34,6 +34,8 @@ from unstructured.__version__ import __version__
 if TYPE_CHECKING:
     from unstructured.documents.elements import Element, Text
 
+_TEMP_DIR = tempfile.gettempdir()
+
 # Box format: [x_bottom_left, y_bottom_left, x_top_right, y_top_right]
 Box: TypeAlias = Tuple[float, float, float, float]
 Point: TypeAlias = Tuple[float, float]
@@ -65,7 +67,7 @@ def is_temp_file_path(file_path: str) -> bool:
     The Python-defined temp directory is platform dependent (macOS != Linux != Windows)
     and can also be determined by an environment variable (TMPDIR, TEMP, or TMP).
     """
-    return file_path.startswith(tempfile.gettempdir())
+    return file_path.startswith(_TEMP_DIR)
 
 
 class lazyproperty(Generic[_T]):
