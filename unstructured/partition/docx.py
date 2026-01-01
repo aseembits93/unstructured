@@ -883,20 +883,19 @@ class _DocxPartitioner:
         Category depth is 0-indexed and relative to the other element types in the document.
         """
 
-        def _extract_number(suffix: str) -> int:
-            return int(suffix.split()[-1]) - 1 if suffix.split()[-1].isdigit() else 0
-
         # Heading styles
         if style_name.startswith("Heading"):
-            return _extract_number(style_name)
+            parts = style_name.split()
+            return int(parts[-1]) - 1 if parts[-1].isdigit() else 0
 
         if style_name == "Subtitle":
             return 1
 
-        # List styles
-        list_prefixes = ["List", "List Bullet", "List Continue", "List Number"]
-        if any(style_name.startswith(prefix) for prefix in list_prefixes):
-            return _extract_number(style_name)
+        # List styles - check each prefix directly for better performance
+        if style_name.startswith("List"):
+            # Handle "List", "List Bullet", "List Continue", "List Number"
+            parts = style_name.split()
+            return int(parts[-1]) - 1 if parts[-1].isdigit() else 0
 
         # Other styles
         return 0
