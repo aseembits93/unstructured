@@ -283,12 +283,13 @@ class PreChunker:
         is subject to mid-text splitting in the second phase of the chunking process.
         """
         pre_chunk_builder = PreChunkBuilder(self._opts)
+        is_new_semantic_unit = self._is_in_new_semantic_unit
 
         for element in self._elements:
             # -- start new pre-chunk when necessary to uphold segregation guarantees --
             if (
                 # -- start new pre-chunk when necessary to uphold segregation guarantees --
-                self._is_in_new_semantic_unit(element)
+                is_new_semantic_unit(element)
                 # -- or when next element won't fit --
                 or not pre_chunk_builder.will_fit(element)
             ):
