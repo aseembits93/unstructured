@@ -561,9 +561,11 @@ class _Chunker:
 
         # -- an oversized pre-chunk will have a remainder, split that up into additional chunks.
         # -- Note these get continuation_metadata which includes is_continuation=True.
-        while remainder:
-            s, remainder = split(remainder)
-            yield CompositeElement(text=s, metadata=self._continuation_metadata)
+        if remainder:
+            continuation_metadata = self._continuation_metadata
+            while remainder:
+                s, remainder = split(remainder)
+                yield CompositeElement(text=s, metadata=continuation_metadata)
 
     @lazyproperty
     def _all_metadata_values(self) -> dict[str, list[Any]]:
