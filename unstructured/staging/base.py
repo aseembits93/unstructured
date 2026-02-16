@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import base64
+import copy
 import csv
 import io
 import json
 import zlib
-from copy import deepcopy
 from datetime import datetime
 from typing import Any, Iterable, Optional, Sequence, cast
 
@@ -21,7 +21,7 @@ from unstructured.documents.elements import (
 )
 from unstructured.file_utils.ndjson import dumps as ndjson_dumps
 from unstructured.partition.common.common import exactly_one
-from unstructured.utils import Point, dependency_exists, requires_dependencies
+from unstructured.utils import dependency_exists, requires_dependencies
 
 if dependency_exists("pandas"):
     import pandas as pd
@@ -230,24 +230,32 @@ def elements_to_ndjson(
 
 
 def _fix_metadata_field_precision(elements: Iterable[Element]) -> list[Element]:
+    # Avoid deepcopy for entire elements; copy element and metadata only if needed
     out_elements: list[Element] = []
+    # Avoid repeated attribute accesses, cache locally
+    append = out_elements.append
+
     for element in elements:
-        el = deepcopy(element)
-        if el.metadata.coordinates:
-            precision = 1 if isinstance(el.metadata.coordinates.system, PixelSpace) else 2
-            points = el.metadata.coordinates.points
+        # Shallow copy the element. We only mutate its .metadata, so copy metadata as well.
+        # Use type(element) for correct subclass instance
+        el = copy.copy(element)
+        el.metadata = copy.copy(element.metadata)
+        metadata = el.metadata
+
+        coordinates = metadata.coordinates
+        if coordinates:
+            points = coordinates.points
             assert points is not None
-            rounded_points: list[Point] = []
-            for point in points:
-                x, y = point
-                rounded_point = (round(x, precision), round(y, precision))
-                rounded_points.append(rounded_point)
-            el.metadata.coordinates.points = tuple(rounded_points)
+            precision = 1 if isinstance(coordinates.system, PixelSpace) else 2
+            # Use tuple comprehension for less overhead
+            coordinates.points = tuple(
+                (round(x, precision), round(y, precision)) for (x, y) in points
+            )
 
-        if el.metadata.detection_class_prob:
-            el.metadata.detection_class_prob = round(el.metadata.detection_class_prob, 5)
+        if metadata.detection_class_prob:
+            metadata.detection_class_prob = round(metadata.detection_class_prob, 5)
 
-        out_elements.append(el)
+        append(el)
 
     return out_elements
 
