@@ -5,7 +5,7 @@ import csv
 import io
 import json
 import zlib
-from copy import deepcopy
+from copy import copy
 from datetime import datetime
 from typing import Any, Iterable, Optional, Sequence, cast
 
@@ -232,8 +232,10 @@ def elements_to_ndjson(
 def _fix_metadata_field_precision(elements: Iterable[Element]) -> list[Element]:
     out_elements: list[Element] = []
     for element in elements:
-        el = deepcopy(element)
+        el = copy(element)
+        el.metadata = copy(element.metadata)
         if el.metadata.coordinates:
+            el.metadata.coordinates = copy(el.metadata.coordinates)
             precision = 1 if isinstance(el.metadata.coordinates.system, PixelSpace) else 2
             points = el.metadata.coordinates.points
             assert points is not None
