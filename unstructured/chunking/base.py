@@ -1273,21 +1273,20 @@ def is_on_next_page() -> BoundaryPredicate:
 
         page_number = element.metadata.page_number
 
-        # -- The first element never reports a page break, it starts the first page of the
-        # -- document. That page could be numbered (page_number is non-None) or not. If it is not
-        # -- numbered we assign it page-number 1.
+        # Fast path for the very common cases
         if is_first:
-            current_page_number = page_number or 1
+            # -- The first element never reports a page break, it starts the first page of the
+            # -- document. That page could be numbered (page_number is non-None) or not. If it is not
+            # -- numbered we assign it page-number 1.
+            current_page_number = page_number if page_number is not None else 1
             is_first = False
             return False
 
         # -- An element with a `None` page-number is assumed to continue the current page. It never
         # -- updates the current-page-number because once set, the current-page-number is "sticky"
         # -- until replaced by a different explicit page-number.
-        if page_number is None:
-            return False
-
-        if page_number == current_page_number:
+        # -- Also, if the page_number equals the current, there's no transition.
+        if page_number is None or page_number == current_page_number:
             return False
 
         # -- it's possible for a page-number to decrease. We don't expect that, but if it happens
