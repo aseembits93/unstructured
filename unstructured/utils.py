@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import functools
 import importlib
+import importlib.util
 import inspect
 import json
 import os
@@ -10,7 +11,7 @@ import platform
 import subprocess
 import tempfile
 import threading
-from functools import wraps
+from functools import lru_cache, wraps
 from itertools import combinations
 from typing import (
     TYPE_CHECKING,
@@ -227,6 +228,7 @@ def requires_dependencies(
     return decorator
 
 
+@lru_cache(maxsize=128)
 def dependency_exists(dependency: str):
     try:
         importlib.import_module(dependency)
