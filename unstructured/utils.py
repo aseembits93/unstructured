@@ -65,7 +65,7 @@ def is_temp_file_path(file_path: str) -> bool:
     The Python-defined temp directory is platform dependent (macOS != Linux != Windows)
     and can also be determined by an environment variable (TMPDIR, TEMP, or TMP).
     """
-    return file_path.startswith(tempfile.gettempdir())
+    return file_path.startswith(_TEMP_DIR)
 
 
 class lazyproperty(Generic[_T]):
@@ -585,11 +585,14 @@ def identify_overlapping_or_nesting_case(
     total_area: float
     """
     box1, box2 = box_pair
-    type1, type2 = label_pair
-    ix_element1 = "".join([ch for ch in type1 if ch.isnumeric()])
-    ix_element2 = "".join([ch for ch in type2 if ch.isnumeric()])
-    type1 = type1[3:].strip()
-    type2 = type2[3:].strip()
+    # Extract index and category more efficiently using partition and lstrip instead of join/listcomp/slice
+    type1_full, _, type1_rest = label_pair[0].partition(".")
+    type2_full, _, type2_rest = label_pair[1].partition(".")
+    ix_element1 = type1_full.strip()
+    ix_element2 = type2_full.strip()
+    type1 = type1_rest.lstrip().strip()
+    type2 = type2_rest.lstrip().strip()
+
     box1_corners = _convert_coordinates_to_box(box1)
     box2_corners = _convert_coordinates_to_box(box2)
     x_bottom_left_1, y_bottom_left_1, x_top_right_1, y_top_right_1 = box1_corners
@@ -681,26 +684,36 @@ def catch_overlapping_and_nested_bboxes(
     """Catch overlapping and nested bounding boxes cases across a list of elements."""
 
     num_pages = elements[-1].metadata.page_number or 0
-    pages_of_bboxes: list[list[Points]] = [[] for _ in range(num_pages)]
+    # Avoid repeated creation of empty lists -- reuse references.
+    pages_of_bboxes: list[list[Points]] = [[] for _ in range(num_pages)] if num_pages > 0 else []
+    text_labels: list[list[str]] = [[] for _ in range(num_pages)] if num_pages > 0 else []
+    text_content: list[list[str]] = [[] for _ in range(num_pages)] if num_pages > 0 else []
+    if not num_pages:
+        return False, []
 
-    text_labels: list[list[str]] = [[] for _ in range(num_pages)]
-    text_content: list[list[str]] = [[] for _ in range(num_pages)]
-
+    # Simultaneously assign to page cache lists to reduce attribute lookup and maintain locality.
     for ix, element in enumerate(elements):
-        page_number = element.metadata.page_number or 1
+        metadata = element.metadata
+        page_number = metadata.page_number or 1
         n_page_to_ix = page_number - 1
-        if element.metadata.coordinates:
-            box = cast(Points, element.metadata.coordinates.to_dict()["points"])
+        coords = metadata.coordinates
+        if coords:
+            dct = coords.to_dict()
+            box = cast(Points, dct["points"])
             pages_of_bboxes[n_page_to_ix].append(box)
         text_labels[n_page_to_ix].append(f"{ix}. {element.category}")
         text_content[n_page_to_ix].append(element.text)
 
     document_with_overlapping_flag = False
     overlapping_cases: list[dict[str, Any]] = []
+
+    # Minor: Avoid unnecessary iteration if page_bboxes is empty or length < 2 (no pairs to compare).
     for page_number, (page_bboxes, page_labels, page_text) in enumerate(
         zip(pages_of_bboxes, text_labels, text_content),
         start=1,
     ):
+        if len(page_bboxes) < 2:
+            continue
         page_bboxes_combinations = list(combinations(page_bboxes, 2))
         page_labels_combinations = list(combinations(page_labels, 2))
         text_content_combinations = list(combinations(page_text, 2))
@@ -729,6 +742,7 @@ def catch_overlapping_and_nested_bboxes(
             )
 
             if overlapping_case:
+                # No change: The inner dict construction is already efficient given the structure.
                 overlapping_cases.append(
                     {
                         "overlapping_elements": overlapping_elements,
@@ -769,3 +783,6 @@ class FileHandler:
         with self.lock:
             if os.path.exists(self.file_path):
                 os.remove(self.file_path)
+
+
+_TEMP_DIR = tempfile.gettempdir()
