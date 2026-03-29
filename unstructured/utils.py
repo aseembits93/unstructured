@@ -65,7 +65,7 @@ def is_temp_file_path(file_path: str) -> bool:
     The Python-defined temp directory is platform dependent (macOS != Linux != Windows)
     and can also be determined by an environment variable (TMPDIR, TEMP, or TMP).
     """
-    return file_path.startswith(tempfile.gettempdir())
+    return file_path.startswith(_TEMP_DIR)
 
 
 class lazyproperty(Generic[_T]):
@@ -383,24 +383,34 @@ def is_parent_box(parent_target: Box, child_target: Box, add: float = 0.0) -> bo
     """
     if len(parent_target) != 4:
         return False
-    parent_targets = [0, 0, 0, 0]
-    if add and len(parent_target) == 4:
-        parent_targets = list(parent_target)
-        parent_targets[0] -= add
-        parent_targets[1] -= add
-        parent_targets[2] += add
-        parent_targets[3] += add
 
-    if (
-        len(child_target) == 4
-        and (child_target[0] >= parent_targets[0] and child_target[1] >= parent_targets[1])
-        and (child_target[2] <= parent_targets[2] and child_target[3] <= parent_targets[3])
-    ):
-        return True
-    return len(child_target) == 2 and (
-        parent_targets[0] <= child_target[0] <= parent_targets[2]
-        and parent_targets[1] <= child_target[1] <= parent_targets[3]
-    )
+    # Fast path: if add is 0, avoid copying and subtracting/adding.
+    if not add:
+        parent_targets = parent_target
+    else:
+        # Avoid redundant list to tuple conversion
+        parent_targets = (
+            parent_target[0] - add,
+            parent_target[1] - add,
+            parent_target[2] + add,
+            parent_target[3] + add,
+        )
+
+    ct_len = len(child_target)
+    if ct_len == 4:
+        return (
+            child_target[0] >= parent_targets[0]
+            and child_target[1] >= parent_targets[1]
+            and child_target[2] <= parent_targets[2]
+            and child_target[3] <= parent_targets[3]
+        )
+    elif ct_len == 2:
+        return (
+            parent_targets[0] <= child_target[0] <= parent_targets[2]
+            and parent_targets[1] <= child_target[1] <= parent_targets[3]
+        )
+    else:
+        return False
 
 
 def calculate_overlap_percentage(
@@ -415,20 +425,26 @@ def calculate_overlap_percentage(
     the smallest element-region (intersection_ratio_method="partial"), or
     the disjunctive union region (intersection_ratio_method="total")
     """
-    x1, y1 = box1[0]
-    x2, y2 = box1[2]
-    x3, y3 = box2[0]
-    x4, y4 = box2[2]
+    (x1, y1) = box1[0]
+    (x2, y2) = box1[2]
+    (x3, y3) = box2[0]
+    (x4, y4) = box2[2]
+
     area_box1 = (x2 - x1) * (y2 - y1)
     area_box2 = (x4 - x3) * (y4 - y3)
+
     x_intersection1 = max(x1, x3)
     y_intersection1 = max(y1, y3)
     x_intersection2 = min(x2, x4)
     y_intersection2 = min(y2, y4)
-    intersection_area = max(0, x_intersection2 - x_intersection1) * max(
-        0,
-        y_intersection2 - y_intersection1,
-    )
+
+    inter_w = x_intersection2 - x_intersection1
+    inter_h = y_intersection2 - y_intersection1
+    if inter_w <= 0 or inter_h <= 0:
+        intersection_area = 0
+    else:
+        intersection_area = inter_w * inter_h
+
     max_area = max(area_box1, area_box2)
     min_area = min(area_box1, area_box2)
     total_area = area_box1 + area_box2
@@ -444,10 +460,10 @@ def calculate_overlap_percentage(
         overlap_percentage = (intersection_area / min_area) * 100
 
     else:
-        if (area_box1 + area_box2) == 0:
+        total_minus_inter = area_box1 + area_box2 - intersection_area
+        if total_minus_inter == 0:
             return 0, 0, 0, 0
-
-        overlap_percentage = (intersection_area / (area_box1 + area_box2 - intersection_area)) * 100
+        overlap_percentage = (intersection_area / total_minus_inter) * 100
 
     return round(overlap_percentage, 2), max_area, min_area, total_area
 
@@ -478,20 +494,12 @@ def identify_overlapping_case(
     min_area: float
     total_area: float
     """
-    overlapping_elements, overlapping_case, overlap_percentage, largest_ngram_percentage = (
-        None,
-        None,
-        None,
-        None,
-    )
     box1, box2 = box_pair
     type1, type2 = label_pair
     text1, text2 = text_pair
     ix_element1, ix_element2 = ix_pair
     (overlap_percentage, max_area, min_area, total_area) = calculate_overlap_percentage(
-        box1,
-        box2,
-        intersection_ratio_method="partial",
+        box1, box2, intersection_ratio_method="partial"
     )
     if overlap_percentage < sm_overlap_threshold:
         overlapping_elements = [
@@ -499,6 +507,7 @@ def identify_overlapping_case(
             f"{type2}(ix={ix_element2})",
         ]
         overlapping_case = "Small partial overlap"
+        largest_ngram_percentage = None
 
     else:
         if not text1:
@@ -507,6 +516,7 @@ def identify_overlapping_case(
                 f"{type2}(ix={ix_element2})",
             ]
             overlapping_case = f"partial overlap with empty content in {type1}"
+            largest_ngram_percentage = None
 
         elif not text2:
             overlapping_elements = [
@@ -514,6 +524,7 @@ def identify_overlapping_case(
                 f"{type1}(ix={ix_element1})",
             ]
             overlapping_case = f"partial overlap with empty content in {type2}"
+            largest_ngram_percentage = None
 
         elif text1 in text2 or text2 in text1:
             overlapping_elements = [
@@ -521,6 +532,7 @@ def identify_overlapping_case(
                 f"{type2}(ix={ix_element2})",
             ]
             overlapping_case = "partial overlap with duplicate text"
+            largest_ngram_percentage = None
 
         else:
             largest_ngram_percentage, _, largest_n = calculate_largest_ngram_percentage(
@@ -533,7 +545,6 @@ def identify_overlapping_case(
                     f"{type2}(ix={ix_element2})",
                 ]
                 overlapping_case = "partial overlap without sharing text"
-
             else:
                 overlapping_elements = [
                     f"{type1}(ix={ix_element1})",
@@ -559,9 +570,10 @@ def _convert_coordinates_to_box(coordinates: Points):
     Expects four coordinates representing the corners of a rectangle, listed in this order:
     bottom-left, top-left, top-right, bottom-right.
     """
-    x_bottom_left_1, y_bottom_left_1 = coordinates[0]
-    x_top_right_1, y_top_right_1 = coordinates[2]
-    return x_bottom_left_1, y_bottom_left_1, x_top_right_1, y_top_right_1
+    # Avoid tuple unpacking more than once
+    c0 = coordinates[0]
+    c2 = coordinates[2]
+    return c0[0], c0[1], c2[0], c2[1]
 
 
 # x1, y1 = box1[0]
@@ -586,10 +598,18 @@ def identify_overlapping_or_nesting_case(
     """
     box1, box2 = box_pair
     type1, type2 = label_pair
-    ix_element1 = "".join([ch for ch in type1 if ch.isnumeric()])
-    ix_element2 = "".join([ch for ch in type2 if ch.isnumeric()])
-    type1 = type1[3:].strip()
-    type2 = type2[3:].strip()
+
+    # Optimize index/label parsing:
+    ix_element1, ix_element2 = "", ""
+    for ch in type1:
+        if ch.isnumeric():
+            ix_element1 += ch
+    for ch in type2:
+        if ch.isnumeric():
+            ix_element2 += ch
+    type1s = type1[3:].strip()
+    type2s = type2[3:].strip()
+
     box1_corners = _convert_coordinates_to_box(box1)
     box2_corners = _convert_coordinates_to_box(box2)
     x_bottom_left_1, y_bottom_left_1, x_top_right_1, y_top_right_1 = box1_corners
@@ -597,52 +617,36 @@ def identify_overlapping_or_nesting_case(
 
     horizontal_overlap = x_bottom_left_1 < x_top_right_2 and x_top_right_1 > x_bottom_left_2
     vertical_overlap = y_bottom_left_1 < y_top_right_2 and y_top_right_1 > y_bottom_left_2
-    (
-        overlapping_elements,
-        parent_element,
-        overlapping_case,
-        overlap_percentage,
-        overlap_percentage_total,
-        largest_ngram_percentage,
-    ) = (
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-    )
-    max_area, min_area, total_area = None, None, None
+
+    overlapping_elements = parent_element = overlapping_case = None
+    overlap_percentage = overlap_percentage_total = largest_ngram_percentage = None
+    max_area = min_area = total_area = None
 
     if horizontal_overlap and vertical_overlap:
         overlap_percentage_total, _, _, _ = calculate_overlap_percentage(
-            box1,
-            box2,
-            intersection_ratio_method="total",
+            box1, box2, intersection_ratio_method="total"
         )
         overlap_percentage, max_area, min_area, total_area = calculate_overlap_percentage(
-            box1,
-            box2,
-            intersection_ratio_method="parent",
+            box1, box2, intersection_ratio_method="parent"
         )
 
         if is_parent_box(box1_corners, box2_corners, add=nested_error_tolerance_px):
             overlapping_elements = [
-                f"{type1}(ix={ix_element1})",
-                f"{type2}(ix={ix_element2})",
+                f"{type1s}(ix={ix_element1})",
+                f"{type2s}(ix={ix_element2})",
             ]
-            overlapping_case = f"nested {type2} in {type1}"
+            overlapping_case = f"nested {type2s} in {type1s}"
             overlap_percentage = 100
-            parent_element = f"{type1}(ix={ix_element1})"
+            parent_element = f"{type1s}(ix={ix_element1})"
 
         elif is_parent_box(box2_corners, box1_corners, add=nested_error_tolerance_px):
             overlapping_elements = [
-                f"{type2}(ix={ix_element2})",
-                f"{type1}(ix={ix_element1})",
+                f"{type2s}(ix={ix_element2})",
+                f"{type1s}(ix={ix_element1})",
             ]
-            overlapping_case = f"nested {type1} in {type2}"
+            overlapping_case = f"nested {type1s} in {type2s}"
             overlap_percentage = 100
-            parent_element = f"{type2}(ix={ix_element2})"
+            parent_element = f"{type2s}(ix={ix_element2})"
 
         else:
             (
@@ -769,3 +773,6 @@ class FileHandler:
         with self.lock:
             if os.path.exists(self.file_path):
                 os.remove(self.file_path)
+
+
+_TEMP_DIR = tempfile.gettempdir()
