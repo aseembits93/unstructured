@@ -463,20 +463,13 @@ def filter_element_types(
         exclude_element_types=exclude_element_types,
     )
 
-    filtered_elements: list[Element] = []
     if include_element_types:
-        for element in elements:
-            if type(element) in include_element_types:
-                filtered_elements.append(element)
-
-        return filtered_elements
+        include_set = set(include_element_types)
+        return [element for element in elements if type(element) in include_set]
 
     elif exclude_element_types:
-        for element in elements:
-            if type(element) not in exclude_element_types:
-                filtered_elements.append(element)
-
-        return filtered_elements
+        exclude_set = set(exclude_element_types)
+        return [element for element in elements if type(element) not in exclude_set]
 
     return list(elements)
 
